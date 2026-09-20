@@ -10,7 +10,7 @@ model = AutoModel(
     disable_update=True  # optional: prevents checking for updates every run
 )
 
-audio_file = "test.aac"  # Make sure this file exists!
+audio_file = "audio_2026-01-29_22-22-08.ogg"  # Make sure this file exists!
 
 # 3. Inference
 # language="auto" lets it detect language.

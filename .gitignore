@@ -1,1 +1,20 @@
+# Virtualenv
+venv
 .venv
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# App-generated data
+dataset.json
+dataset_audio/
+downloads/
+
+# Redis snapshots
+dump.rdb
+*.rdb
+
+# Environment / secrets
+.env
