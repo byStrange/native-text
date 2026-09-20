@@ -1,0 +1,18 @@
+# Telegram bot (producer)
+python-telegram-bot>=20          # v20+ async API
+
+# Task queue + broker
+celery[redis]
+redis
+
+# Transcription
+faster-whisper                   # worker_test.py (active worker) - large-v3-turbo
+funasr                           # worker.py / test.py - SenseVoiceSmall
+torch                            # required by funasr; install the CUDA build for GPU:
+                                 #   pip install torch --index-url https://download.pytorch.org/whl/cu121
+
+# Summarization
+ollama
+
+# HTTP (direct Telegram sendMessage calls from workers)
+requests

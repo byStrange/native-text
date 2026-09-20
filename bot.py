@@ -11,6 +11,8 @@ from celery import Celery
 import redis
 import json
 
+from config import SUMMARIZATION_ENABLED, DATA_COLLECTION_ENABLED
+
 BOT_TOKEN = os.getenv("BOT_TOKEN")  # Same token
 DOWNLOAD_DIR = "downloads"
 DATASET_FILE = "dataset.json"
@@ -40,6 +42,9 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+
+    if not DATA_COLLECTION_ENABLED:
+        return
 
     data = query.data
     action, task_id = data.split(":", 1)
@@ -77,6 +82,10 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     task_id = context.user_data.get("correction_task_id")
     if task_id:
         await process_correction(update, context, task_id)
+        return
+
+    # Summarization is optional - without it there is nothing to say
+    if not SUMMARIZATION_ENABLED:
         return
 
     # Regular text message - queue for summarization
@@ -135,6 +144,9 @@ def save_dataset_entry(entry):
 
 
 if __name__ == "__main__":
+    print(f"Summarization: {'on' if SUMMARIZATION_ENABLED else 'off'} | "
+          f"Data collection: {'on' if DATA_COLLECTION_ENABLED else 'off'}")
+
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     # Filter for Voice notes only

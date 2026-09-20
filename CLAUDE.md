@@ -19,8 +19,10 @@ Uzbek Speech-to-Text Telegram Bot with dataset collection and LLM-powered summar
 3. Worker transcribes with faster-whisper (large-v3-turbo)
 4. User receives **transcription** (1:1 text)
 5. Worker generates **summary** via Ollama ("User is trying to...")
-6. If Uzbek detected (or low confidence), audio moved to `dataset_audio/` + feedback buttons shown
+6. If Uzbek detected (or low confidence), audio moved to `dataset_audio/` + feedback buttons shown *(only when `ENABLE_DATA_COLLECTION` is on)*
 7. User corrections saved to `dataset.json`
+
+Steps 5-7 are gated behind the feature flags below.
 
 **Text Message Flow:**
 1. User sends text (not in correction mode)
@@ -29,6 +31,13 @@ Uzbek Speech-to-Text Telegram Bot with dataset collection and LLM-powered summar
 4. Summary sent back to user
 
 ## Development Commands
+
+**Install dependencies:**
+```bash
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
 
 **Start Redis (required):**
 ```bash
@@ -63,6 +72,8 @@ python test.py  # Uses SenseVoiceSmall model
 | `worker.py` | Alternative worker using SenseVoice model (no summarization) |
 | `test.py` | Standalone SenseVoice transcription test |
 | `prompts/summarization_system_prompt.txt` | LLM system prompt for summarization |
+| `config.py` | Shared env config + feature flags |
+| `requirements.txt` | Python dependencies |
 | `dataset.json` | Collected training data (verified/corrected transcriptions) |
 | `dataset_audio/` | Persistent audio files for dataset |
 | `downloads/` | Temporary audio download folder (auto-cleaned) |
@@ -77,7 +88,22 @@ export OLLAMA_HOST="http://localhost:11434"     # For local: http://localhost:11
                                                 # For Ollama Cloud: https://ollama.com
 export OLLAMA_MODEL="llama3.2"                # Model name (e.g., llama3.2, mistral, etc.)
 export OLLAMA_API_KEY="your_api_key"            # Required for Ollama Cloud, optional for local
+
+# Feature flags (see config.py)
+export ENABLE_SUMMARIZATION=1                   # Default: on only if OLLAMA_API_KEY is set
+export ENABLE_DATA_COLLECTION=0                 # Default: on
 ```
+
+**Feature flags:**
+
+| Flag | Default | Off behavior |
+|------|---------|--------------|
+| `ENABLE_SUMMARIZATION` | On only when `OLLAMA_API_KEY` is set | No summary after transcriptions; text messages get no reply at all. Ollama is never contacted. Set to `1` to enable against a local Ollama, which needs no key. |
+| `ENABLE_DATA_COLLECTION` | On | No feedback buttons, no audio kept in `dataset_audio/`, nothing written to `dataset.json`. Voice notes are transcribed, replied to, and the temp file deleted. |
+
+Accepted truthy values: `1`, `true`, `yes`, `on` (case-insensitive). Anything else is false.
+Note that Uzbek re-transcription is a transcription-quality fix and runs regardless of
+`ENABLE_DATA_COLLECTION`.
 
 ## Key Implementation Details
 

@@ -12,9 +12,13 @@ import redis
 # Ollama configuration
 # For Ollama Cloud, use: https://ollama.com (no /api suffix - the client handles it)
 # For local Ollama, use: http://localhost:11434 (default)
-OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gpt-oss:20b-cloud")
-OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY")  # Required for Ollama Cloud
+from config import (
+    OLLAMA_HOST,
+    OLLAMA_MODEL,
+    OLLAMA_API_KEY,
+    SUMMARIZATION_ENABLED,
+    DATA_COLLECTION_ENABLED,
+)
 
 def get_ollama_client():
     """Create and configure Ollama client with proper authentication."""
@@ -45,8 +49,13 @@ def load_system_prompt():
 
 SYSTEM_PROMPT = load_system_prompt()
 
-def generate_summary(text: str) -> str:
-    """Generate a summary of the user's message using Ollama."""
+def generate_summary(text: str):
+    """Summarize the user's message via Ollama.
+
+    Returns None when summarization is disabled, so callers skip the reply.
+    """
+    if not SUMMARIZATION_ENABLED:
+        return None
     try:
         client = get_ollama_client()
         response = client.chat(
@@ -60,18 +69,17 @@ def generate_summary(text: str) -> str:
     except Exception as e:
         print(f"Ollama error: {e}")
         return f"⚠️ Could not generate summary: {str(e)}"
-        return f"⚠️ Could not generate summary: {str(e)}"
-    except KeyError:
-        print(f"Unexpected Ollama response format: {result}")
-        return "⚠️ Could not generate summary: unexpected response format"
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 app = Celery("audio_worker", broker="redis://localhost:6379/0")
 redis_client = redis.Redis.from_url("redis://localhost:6379/0", decode_responses=True)
 DATASET_AUDIO_DIR = "dataset_audio"
-os.makedirs(DATASET_AUDIO_DIR, exist_ok=True)
+if DATA_COLLECTION_ENABLED:
+    os.makedirs(DATASET_AUDIO_DIR, exist_ok=True)
 
+print(f"Summarization: {'on' if SUMMARIZATION_ENABLED else 'off'} | "
+      f"Data collection: {'on' if DATA_COLLECTION_ENABLED else 'off'}")
 print("Worker process starting... Loading WhisperModel into VRAM...")
 
 model_size = "large-v3-turbo"
@@ -92,7 +100,7 @@ def transcribe_and_reply(chat_id, file_path, original_msg_id, file_id):
 
     detected_lang = info.language
     probability = info.language_probability
-    enable_collection = False
+    is_uzbek = False
     uz_related_langs = ["tr", "uz", "kk", "az"]
 
     original_segments = segments
@@ -103,7 +111,7 @@ def transcribe_and_reply(chat_id, file_path, original_msg_id, file_id):
     print(f"Detected: {detected_lang} ({probability:.2f})")
 
     if (detected_lang in uz_related_langs) or probability < 0.6:
-        enable_collection = True
+        is_uzbek = True
         print(f"{detected_lang} detected! Correcting to Uzbek...")
         segments, info = global_model.transcribe(
             file_path,
@@ -135,7 +143,10 @@ def transcribe_and_reply(chat_id, file_path, original_msg_id, file_id):
     )
 
     print(detected_lang)
-    if enable_collection:
+    # Re-transcription above is a quality fix and always runs; only the
+    # dataset side-effects are gated behind the data gathering flag.
+    collect = is_uzbek and DATA_COLLECTION_ENABLED
+    if collect:
         # Move file to persistence directory
         filename = os.path.basename(file_path)
         final_path = os.path.join(DATASET_AUDIO_DIR, filename)
@@ -171,8 +182,8 @@ def transcribe_and_reply(chat_id, file_path, original_msg_id, file_id):
             "reply_to_message_id": original_msg_id,
         }
 
-        # Add buttons to the last chunk if Uzbek
-        if is_last and enable_collection:
+        # Add buttons to the last chunk if we are gathering data
+        if is_last and collect:
             reply_markup = {
                 "inline_keyboard": [
                     [
@@ -197,6 +208,9 @@ def transcribe_and_reply(chat_id, file_path, original_msg_id, file_id):
             print(f"Error sending message: {e}")
 
     # Generate and send summary after all chunks
+    if not SUMMARIZATION_ENABLED:
+        return
+
     try:
         print(f"Generating summary for transcription...")
         summary = generate_summary(text)
@@ -217,6 +231,10 @@ def transcribe_and_reply(chat_id, file_path, original_msg_id, file_id):
 @app.task(name="summarize_text_task")
 def summarize_text_and_reply(chat_id: int, text: str, original_msg_id: int):
     """Summarize a text message and send the result back to Telegram."""
+    if not SUMMARIZATION_ENABLED:
+        print("Summarization disabled; ignoring text task")
+        return
+
     try:
         print(f"Summarizing text message: {text[:50]}...")
         summary = generate_summary(text)
