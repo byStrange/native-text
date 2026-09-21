@@ -16,3 +16,6 @@ ollama
 
 # HTTP (direct Telegram sendMessage calls from workers)
 requests
+
+# Config
+python-dotenv                    # loads .env in config.py
