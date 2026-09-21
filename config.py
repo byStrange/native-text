@@ -2,6 +2,12 @@
 
 import os
 
+from dotenv import load_dotenv
+
+# Load .env from the project root so BOT_TOKEN and the flags work without
+# exporting them by hand. Real env vars still win over the file.
+load_dotenv()
+
 
 def _env_flag(name: str, default: bool) -> bool:
     """Read a boolean env var. Accepts 1/true/yes/on (case-insensitive)."""

@@ -4,6 +4,8 @@ import re
 from celery import Celery
 from funasr import AutoModel
 
+import config  # noqa: F401  # imported for its .env loading side effect
+
 app = Celery("audio_worker", broker="redis://localhost:6379/0")
 
 print("Worker process starting... Loading SenseVoice into VRAM...")
